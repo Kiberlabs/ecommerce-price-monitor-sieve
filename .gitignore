@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+.venv/
+*.db
+*.db-shm
+*.db-wal
+data/output_*.csv

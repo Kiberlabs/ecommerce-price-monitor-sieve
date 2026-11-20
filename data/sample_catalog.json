@@ -1,0 +1,98 @@
+[
+  {
+    "sku": "KB-MON-27QHD",
+    "title": "27-inch QHD Ergonomic IPS Office Monitor",
+    "supplier_url": "https://catalog.example-distributor.eu/items/KB-MON-27QHD",
+    "supplier_price_eur": 129.00,
+    "target_resale_eur": 219.00,
+    "shipping_cost_eur": 6.50,
+    "in_stock": true,
+    "ships_from_eu": true,
+    "delivery_days": 2,
+    "rating": 4.7
+  },
+  {
+    "sku": "KB-DOCK-TB4",
+    "title": "Thunderbolt 4 Dual-4K Aluminum Docking Station",
+    "supplier_url": "https://catalog.example-distributor.eu/items/KB-DOCK-TB4",
+    "supplier_price_eur": 84.50,
+    "target_resale_eur": 159.00,
+    "shipping_cost_eur": 4.90,
+    "in_stock": true,
+    "ships_from_eu": true,
+    "delivery_days": 3,
+    "rating": 4.6
+  },
+  {
+    "sku": "KB-SCAN-PRO",
+    "title": "High-Speed Duplex Document Scanner Wi-Fi",
+    "supplier_url": "https://b2b.nordic-supply.example.com/p/KB-SCAN-PRO",
+    "supplier_price_eur": 152.00,
+    "target_resale_eur": 249.00,
+    "shipping_cost_eur": 7.00,
+    "in_stock": true,
+    "ships_from_eu": true,
+    "delivery_days": 4,
+    "rating": 4.4
+  },
+  {
+    "sku": "KB-CABLE-LOWM",
+    "title": "Generic USB-C Braided Cable 1m (Thin Margin)",
+    "supplier_url": "https://b2b.nordic-supply.example.com/p/KB-CABLE-LOWM",
+    "supplier_price_eur": 6.80,
+    "target_resale_eur": 9.99,
+    "shipping_cost_eur": 1.50,
+    "in_stock": true,
+    "ships_from_eu": true,
+    "delivery_days": 2,
+    "rating": 4.5
+  },
+  {
+    "sku": "KB-CHAIR-OOS",
+    "title": "Mesh Lumbar Task Chair (Out of Stock)",
+    "supplier_url": "https://catalog.example-distributor.eu/items/KB-CHAIR-OOS",
+    "supplier_price_eur": 95.00,
+    "target_resale_eur": 189.00,
+    "shipping_cost_eur": 12.00,
+    "in_stock": false,
+    "ships_from_eu": true,
+    "delivery_days": 3,
+    "rating": 4.8
+  },
+  {
+    "sku": "KB-HUB-OVERSEAS",
+    "title": "7-Port Industrial USB Hub (Non-EU Slow Dispatch)",
+    "supplier_url": "https://global.example-exporter.org/sku/KB-HUB-OVERSEAS",
+    "supplier_price_eur": 18.00,
+    "target_resale_eur": 49.00,
+    "shipping_cost_eur": 5.00,
+    "in_stock": true,
+    "ships_from_eu": false,
+    "delivery_days": 16,
+    "rating": 4.3
+  },
+  {
+    "sku": "KB-CAM-LOWRATE",
+    "title": "1080p Fixed Focus Webcam (High Defect Rate)",
+    "supplier_url": "https://catalog.example-distributor.eu/items/KB-CAM-LOWRATE",
+    "supplier_price_eur": 19.00,
+    "target_resale_eur": 45.00,
+    "shipping_cost_eur": 3.50,
+    "in_stock": true,
+    "ships_from_eu": true,
+    "delivery_days": 3,
+    "rating": 3.4
+  },
+  {
+    "sku": "KB-SSRF-BLOCKED",
+    "title": "Malformed Internal Metadata Probe (Blocked by SSRF Guard)",
+    "supplier_url": "http://169.254.169.254/latest/meta-data/",
+    "supplier_price_eur": 10.00,
+    "target_resale_eur": 35.00,
+    "shipping_cost_eur": 2.00,
+    "in_stock": true,
+    "ships_from_eu": true,
+    "delivery_days": 2,
+    "rating": 4.9
+  }
+]
