@@ -5,7 +5,11 @@ from .storage import SnapshotStore
 
 
 def compute_net_economics(item: ProductSnapshot, cfg: SieveConfig) -> tuple[float, float]:
-    """Return (net_profit_eur, net_margin_pct) after marketplace fees, shipping, and return reserve."""
+    """Calculate net unit profit (EUR) and net margin ratio after all selling costs.
+
+    Deducts supplier price, outbound shipping, marketplace commission, and return reserve
+    from target_resale_eur. Returns (rounded_profit_eur, rounded_margin_ratio).
+    """
     fees = item.target_resale_eur * (cfg.marketplace_fee_pct + cfg.return_reserve_pct)
     total_cost = item.supplier_price_eur + item.shipping_cost_eur + fees
     net_profit = item.target_resale_eur - total_cost
@@ -16,6 +20,10 @@ def compute_net_economics(item: ProductSnapshot, cfg: SieveConfig) -> tuple[floa
 def detect_price_drop(
     item: ProductSnapshot, previous_price: float | None, min_drop_pct: float
 ) -> PriceAlert | None:
+    """Compare current supplier price against the last stored observation.
+
+    Returns a PriceAlert if the relative drop meets or exceeds min_drop_pct; otherwise None.
+    """
     if previous_price is None or previous_price <= 0 or item.supplier_price_eur >= previous_price:
         return None
     drop_pct = round((previous_price - item.supplier_price_eur) / previous_price, 4)
@@ -36,7 +44,12 @@ def evaluate_product(
     cfg: SieveConfig,
     previous_price: float | None = None,
 ) -> FilterVerdict:
-    """Deterministic zero-token 3-stage B2B catalog sieve."""
+    """Run a single SKU through the deterministic 3-stage B2B sieve pipeline.
+
+    Flow: (1) Operational hard gate (stock, EU dispatch, SLA, rating) ->
+    (2) Net profit & margin floor check -> (3) Weighted 0-100 priority score
+    combining margin, rating, delivery speed, and active price-drop bonus.
+    """
     net_profit, net_margin = compute_net_economics(item, cfg)
     alert = detect_price_drop(item, previous_price, cfg.price_drop_alert_pct)
     reasons: list[str] = []
@@ -108,6 +121,11 @@ def run_sieve_batch(
     store: SnapshotStore,
     cfg: SieveConfig | None = None,
 ) -> list[FilterVerdict]:
+    """Evaluate a catalog batch end-to-end against SQLite history and persist each snapshot.
+
+    Looks up prior SKU price before writing the new observation, collects all verdicts,
+    and returns them sorted by (approved, score, net_profit_eur) descending.
+    """
     active_cfg = cfg or SieveConfig()
     verdicts: list[FilterVerdict] = []
     for item in snapshots:

@@ -8,7 +8,11 @@ from pydantic import BaseModel, Field, field_validator
 
 
 def validate_public_http_url(url: str) -> str:
-    """Reject non-HTTP schemes, loopback/private IPs, and internal hostnames (SSRF guard)."""
+    """Enforce SSRF boundaries on supplier URLs.
+
+    Accepts only HTTP(S) URLs with public hosts; rejects localhost, internal
+    suffixes (.local/.internal), and non-public/link-local/loopback IP literals.
+    """
     parsed = urlsplit(url.strip())
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise ValueError(f"Invalid HTTP(S) URL: {url!r}")
@@ -36,6 +40,8 @@ def validate_public_http_url(url: str) -> str:
 
 
 class ProductSnapshot(BaseModel):
+    """Single validated supplier product observation ingested from a catalog feed."""
+
     sku: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=240)
     supplier_url: str
@@ -55,6 +61,8 @@ class ProductSnapshot(BaseModel):
 
 
 class SieveConfig(BaseModel):
+    """Operational thresholds, fee percentages, and alert ratios controlling the 3-stage sieve."""
+
     marketplace_fee_pct: float = Field(ge=0.0, lt=1.0, default=0.12)
     return_reserve_pct: float = Field(ge=0.0, lt=1.0, default=0.04)
     min_net_profit_eur: float = Field(ge=0.0, default=8.0)
@@ -66,6 +74,8 @@ class SieveConfig(BaseModel):
 
 
 class PriceAlert(BaseModel):
+    """Emitted when a SKU's current supplier price drops beyond the configured threshold."""
+
     sku: str
     title: str
     previous_price_eur: float
@@ -75,6 +85,8 @@ class PriceAlert(BaseModel):
 
 
 class FilterVerdict(BaseModel):
+    """Final per-SKU decision, net economics, ranking score (0-100), and optional price-drop alert."""
+
     sku: str
     title: str
     approved: bool

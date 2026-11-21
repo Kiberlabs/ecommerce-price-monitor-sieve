@@ -36,6 +36,7 @@ class SnapshotStore:
     """Concurrent SQLite WAL store for historical supplier snapshots and price-drop alerts."""
 
     def __init__(self, db_path: str | Path) -> None:
+        """Open SQLite in WAL mode with 5s busy timeout and bootstrap schema tables/indexes."""
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path), timeout=5.0)
@@ -52,6 +53,7 @@ class SnapshotStore:
         return str(row[0]).lower() if row else ""
 
     def get_previous_price(self, sku: str) -> float | None:
+        """Return the most recent recorded supplier price for a SKU, or None if unseen."""
         row = self._conn.execute(
             "SELECT supplier_price_eur FROM price_snapshots WHERE sku = ? ORDER BY recorded_at DESC, id DESC LIMIT 1",
             (sku,),
@@ -59,6 +61,7 @@ class SnapshotStore:
         return float(row["supplier_price_eur"]) if row is not None else None
 
     def save_observation(self, snapshot: ProductSnapshot, alert: PriceAlert | None = None) -> None:
+        """Atomically persist a product snapshot and, when present, its triggered price-drop alert."""
         with self._conn:
             self._conn.execute(
                 """
@@ -94,6 +97,7 @@ class SnapshotStore:
                 )
 
     def recent_alerts(self, limit: int = 20) -> list[dict[str, object]]:
+        """Fetch the latest triggered price-drop alerts ordered newest-first."""
         rows = self._conn.execute(
             "SELECT sku, title, previous_price_eur, current_price_eur, drop_pct, recorded_at "
             "FROM alerts_log ORDER BY id DESC LIMIT ?",

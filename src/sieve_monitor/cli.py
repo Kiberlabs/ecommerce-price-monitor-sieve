@@ -14,6 +14,10 @@ from .storage import SnapshotStore
 
 
 def load_catalog(path: Path) -> tuple[list[ProductSnapshot], list[dict[str, str]]]:
+    """Parse and validate a supplier JSON feed, separating valid snapshots from blocked rows.
+
+    Invalid or SSRF-blocked entries are collected in rejected_inputs instead of aborting the batch.
+    """
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, list):
         raise ValueError("Catalog JSON must be a list of product objects.")
@@ -29,6 +33,7 @@ def load_catalog(path: Path) -> tuple[list[ProductSnapshot], list[dict[str, str]
 
 
 def export_csv(verdicts: list[FilterVerdict], csv_path: Path) -> None:
+    """Write ranked filter verdicts and price-drop metrics to a UTF-8 CSV report."""
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     with csv_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
@@ -48,6 +53,7 @@ def export_csv(verdicts: list[FilterVerdict], csv_path: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entrypoint: loads catalog -> runs 3-stage sieve with SQLite WAL -> exports CSV/JSON."""
     parser = argparse.ArgumentParser(prog="sieve-monitor", description="KiberLabs B2B Price & Margin Sieve")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
