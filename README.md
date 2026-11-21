@@ -1,5 +1,7 @@
 # KiberLabs — E-Commerce Price Intelligence & Margin Sieve
 
+[![CI](https://github.com/Kiberlabs/ecommerce-price-monitor-sieve/actions/workflows/ci.yml/badge.svg)](https://github.com/Kiberlabs/ecommerce-price-monitor-sieve/actions/workflows/ci.yml)
+
 ![KiberLabs Price Intelligence & Margin Sieve](assets/cover_01_price_sieve.jpg)
 
 A deterministic, **zero-token Python price monitoring and unit-economics filtering engine** built for B2B e-commerce teams, wholesale distributors, and marketplace operators.
