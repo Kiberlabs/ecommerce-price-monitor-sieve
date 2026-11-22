@@ -8,6 +8,8 @@ A deterministic, **zero-token Python price monitoring and unit-economics filteri
 
 Instead of burning LLM tokens on noisy supplier feeds, `sieve-monitor` enforces strict operational gates, net-margin thresholds (after marketplace fees, shipping, and return reserves), SSRF input sanitization, and historical price-drop detection backed by concurrent **SQLite (`WAL`)** storage.
 
+
+> **Public Evaluation Sandbox & Scope Note:** This repository contains the open reference core and deterministic `pytest` harness operating on synthetic fixtures (`data/sample_*`) under the [MIT License](LICENSE). Production connectors (live anti-bot scrapers, WhatsApp/Telegram cloud webhooks, ERP/SAP & VIES adapters, and multi-tenant deployment manifests) are maintained in **KiberLabs Private Enterprise Repositories** and delivered under client SOW.
 ---
 
 ## Architecture
@@ -75,4 +77,4 @@ ecommerce-price-monitor-sieve/
 
 ## License
 
-MIT — Built by **KiberLabs Engineering** (*AI & Python Automation Studio*).
+[MIT](LICENSE) — Built by **KiberLabs Engineering** (*AI & Python Automation Studio*).
