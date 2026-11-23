@@ -30,6 +30,7 @@ flowchart LR
 - **True Net-Margin Math:** Accounts for supplier cost, outbound shipping, marketplace commission (`12%` default), and return/refund reserve (`4%` default) before approving any SKU.
 - **Concurrent SQLite WAL Persistence:** Configured with `PRAGMA journal_mode=WAL` and `busy_timeout=5000` to prevent reader/writer lock contention during scheduled cron scrapes.
 - **Built-in SSRF Boundary Validation:** Rejects non-HTTP schemes, loopback/private IPv4 & IPv6 ranges (`127.0.0.0/8`, `169.254.169.254`, RFC1918), and `.internal`/`.local` hostnames at ingestion time.
+- **IQR Outlier Trimming & Liquidity Scoring (`0–100`):** `trim_outliers_iqr()` and `compute_market_valuation()` strip noisy lowball/inflated listings via Tukey's `1.5x IQR` rule, compute `P40` competitive fast-sell targets (with optional anchor cap), and score market liquidity before capital allocation.
 
 ---
 

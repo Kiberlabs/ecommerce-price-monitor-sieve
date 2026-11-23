@@ -108,3 +108,24 @@ def test_cli_end_to_end_json_and_csv(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert payload["blocked_invalid_inputs"][0]["sku"] == "KB-SSRF-BLOCKED"
     assert payload["approved_count"] == 3
     assert csv_file.exists()
+
+
+def test_iqr_outlier_trimming_and_market_valuation_liquidity_score() -> None:
+    from sieve_monitor.filter_engine import compute_market_valuation, trim_outliers_iqr
+
+    # Removes damaged accessory lowball (3.0) and inflated typo (999.0)
+    trimmed = trim_outliers_iqr([3.0, 68.0, 72.0, 75.0, 78.0, 80.0, 84.0, 999.0])
+    assert 3.0 not in trimmed and 999.0 not in trimmed
+    assert len(trimmed) == 6
+
+    val = compute_market_valuation(
+        [3.0, 68.0, 72.0, 75.0, 78.0, 80.0, 84.0, 999.0],
+        anchor_cap_eur=90.0,
+    )
+    assert val.sample_count == 8 and val.trimmed_count == 6
+    assert val.median_eur == 76.5
+    assert val.fast_sell_p40_eur == 70.2  # Capped at 78% of 90.0 anchor
+    assert val.liquidity_score >= 70 and val.low_liquidity is False
+
+    empty = compute_market_valuation([])
+    assert empty.liquidity_score == 0 and empty.low_liquidity is True

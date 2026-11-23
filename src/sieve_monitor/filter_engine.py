@@ -1,7 +1,74 @@
 from __future__ import annotations
 
-from .models import FilterVerdict, PriceAlert, ProductSnapshot, SieveConfig
+from .models import FilterVerdict, MarketValuation, PriceAlert, ProductSnapshot, SieveConfig
 from .storage import SnapshotStore
+
+
+def _percentile(sorted_vals: list[float], p: float) -> float:
+    if len(sorted_vals) == 1:
+        return sorted_vals[0]
+    idx = (len(sorted_vals) - 1) * p
+    lo = int(idx)
+    hi = min(lo + 1, len(sorted_vals) - 1)
+    frac = idx - lo
+    return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * frac
+
+
+def trim_outliers_iqr(prices: list[float]) -> list[float]:
+    """Remove extreme low/high noisy listings using Tukey's 1.5x interquartile range rule."""
+    clean = sorted(float(p) for p in prices if p > 0)
+    if len(clean) < 4:
+        return clean
+    q1 = _percentile(clean, 0.25)
+    q3 = _percentile(clean, 0.75)
+    iqr = q3 - q1
+    if iqr <= 0:
+        return clean
+    lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+    trimmed = [p for p in clean if lo <= p <= hi]
+    return trimmed or clean
+
+
+def compute_market_valuation(
+    comp_prices: list[float],
+    *,
+    min_liquidity_score: int = 20,
+    anchor_cap_eur: float | None = None,
+    anchor_cap_ratio: float = 0.78,
+) -> MarketValuation:
+    """Compute IQR-trimmed median, P40 fast-sell target, and 0-100 market liquidity score."""
+    raw = [float(p) for p in comp_prices if p > 0]
+    trimmed = trim_outliers_iqr(raw)
+    if not trimmed:
+        return MarketValuation(
+            sample_count=len(raw),
+            trimmed_count=0,
+            liquidity_score=0,
+            low_liquidity=True,
+        )
+
+    median = round(_percentile(trimmed, 0.50), 2)
+    fast_p40 = round(_percentile(trimmed, 0.40), 2)
+    if anchor_cap_eur is not None and anchor_cap_eur > 0:
+        fast_p40 = round(min(fast_p40, anchor_cap_eur * anchor_cap_ratio), 2)
+
+    q1 = _percentile(trimmed, 0.25)
+    q3 = _percentile(trimmed, 0.75)
+    spread_ratio = round((q3 - q1) / median, 4) if median > 0 else 1.0
+
+    # Density rewards active comparable depth; tight IQR spread rewards predictable market pricing
+    density_pts = min(65.0, len(trimmed) * 8.0)
+    stability_pts = max(0.0, 35.0 * (1.0 - min(1.0, spread_ratio)))
+    liquidity = int(round(min(100.0, density_pts + stability_pts)))
+    return MarketValuation(
+        sample_count=len(raw),
+        trimmed_count=len(trimmed),
+        median_eur=median,
+        fast_sell_p40_eur=fast_p40,
+        spread_ratio=spread_ratio,
+        liquidity_score=liquidity,
+        low_liquidity=liquidity < min_liquidity_score,
+    )
 
 
 def compute_net_economics(item: ProductSnapshot, cfg: SieveConfig) -> tuple[float, float]:

@@ -96,3 +96,15 @@ class FilterVerdict(BaseModel):
     net_margin_pct: float
     score: float
     price_alert: PriceAlert | None = None
+
+
+class MarketValuation(BaseModel):
+    """Outlier-trimmed comparable market valuation and liquidity score (0-100)."""
+
+    sample_count: int
+    trimmed_count: int
+    median_eur: float | None = None
+    fast_sell_p40_eur: float | None = None
+    spread_ratio: float | None = None
+    liquidity_score: int = Field(ge=0, le=100)
+    low_liquidity: bool
