@@ -52,9 +52,9 @@ PYTHONPATH=src python -m sieve_monitor run \
 
 ```text
 [KiberLabs Sieve] Processed=7 | Approved=3 | Blocked=1 | Alerts=0
-  + KB-DOCK-TB4  score= 77.7  profit= 44.16 EUR (27.8%) — Thunderbolt 4 Dual-4K Aluminum Docking Station
-  + KB-MON-27QHD score= 76.6  profit= 48.46 EUR (22.1%) — 27-inch QHD Ergonomic IPS Office Monitor
-  + KB-SCAN-PRO  score= 68.2  profit= 50.16 EUR (20.1%) — High-Speed Duplex Document Scanner Wi-Fi
+  + KB-DOCK-TB4  score= 73.9  profit= 44.16 EUR (27.8%) — Thunderbolt 4 Dual-4K Aluminum Docking Station
+  + KB-MON-27QHD score= 70.5  profit= 48.46 EUR (22.1%) — 27-inch QHD Ergonomic IPS Office Monitor
+  + KB-SCAN-PRO  score= 58.2  profit= 50.16 EUR (20.1%) — High-Speed Duplex Document Scanner Wi-Fi
 ```
 
 ---

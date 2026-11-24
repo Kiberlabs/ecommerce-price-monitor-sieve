@@ -32,6 +32,13 @@ def load_catalog(path: Path) -> tuple[list[ProductSnapshot], list[dict[str, str]
     return valid, rejected_inputs
 
 
+def _csv_safe(value: object) -> str:
+    s = str(value)
+    if s[:1] in ("=", "+", "-", "@", "\t", "\r", "\n") or s.lstrip()[:1] in ("=", "+", "-", "@"):
+        return "'" + s
+    return s
+
+
 def export_csv(verdicts: list[FilterVerdict], csv_path: Path) -> None:
     """Write ranked filter verdicts and price-drop metrics to a UTF-8 CSV report."""
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -40,15 +47,15 @@ def export_csv(verdicts: list[FilterVerdict], csv_path: Path) -> None:
         writer.writerow(["sku", "title", "approved", "stage", "net_profit_eur", "net_margin_pct", "score", "alert_drop_pct", "reasons"])
         for v in verdicts:
             writer.writerow([
-                v.sku,
-                v.title,
+                _csv_safe(v.sku),
+                _csv_safe(v.title),
                 v.approved,
-                v.stage_reached,
+                _csv_safe(v.stage_reached),
                 f"{v.net_profit_eur:.2f}",
                 f"{v.net_margin_pct:.4f}",
                 f"{v.score:.1f}",
                 f"{v.price_alert.drop_pct:.4f}" if v.price_alert else "",
-                ";".join(v.reasons),
+                _csv_safe(";".join(v.reasons)),
             ])
 
 

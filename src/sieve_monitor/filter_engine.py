@@ -1,7 +1,23 @@
 from __future__ import annotations
 
-from .models import FilterVerdict, MarketValuation, PriceAlert, ProductSnapshot, SieveConfig
+import math
+from datetime import datetime
+
+from .models import FilterVerdict, MarketValuation, PriceAlert, ProductSnapshot, SieveConfig, _normalize_utc
 from .storage import SnapshotStore
+
+
+def _validate_finite_prices(prices: list[float]) -> list[float]:
+    positive: list[float] = []
+    for raw in prices:
+        if isinstance(raw, bool):
+            raise ValueError(f"Boolean value is not valid for price: {raw!r}")
+        val = float(raw)
+        if not math.isfinite(val):
+            raise ValueError(f"Non-finite price value: {raw!r}")
+        if val > 0:
+            positive.append(val)
+    return positive
 
 
 def _percentile(sorted_vals: list[float], p: float) -> float:
@@ -16,14 +32,16 @@ def _percentile(sorted_vals: list[float], p: float) -> float:
 
 def trim_outliers_iqr(prices: list[float]) -> list[float]:
     """Remove extreme low/high noisy listings using Tukey's 1.5x interquartile range rule."""
-    clean = sorted(float(p) for p in prices if p > 0)
+    clean = sorted(_validate_finite_prices(prices))
     if len(clean) < 4:
         return clean
     q1 = _percentile(clean, 0.25)
     q3 = _percentile(clean, 0.75)
     iqr = q3 - q1
     if iqr <= 0:
-        return clean
+        med = _percentile(clean, 0.50)
+        trimmed = [p for p in clean if abs(p - med) <= 0.5 * med]
+        return trimmed or clean
     lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
     trimmed = [p for p in clean if lo <= p <= hi]
     return trimmed or clean
@@ -37,7 +55,13 @@ def compute_market_valuation(
     anchor_cap_ratio: float = 0.78,
 ) -> MarketValuation:
     """Compute IQR-trimmed median, P40 fast-sell target, and 0-100 market liquidity score."""
-    raw = [float(p) for p in comp_prices if p > 0]
+    if isinstance(min_liquidity_score, bool):
+        raise ValueError(f"Boolean value is not valid for min_liquidity_score: {min_liquidity_score!r}")
+    if isinstance(anchor_cap_ratio, bool) or not math.isfinite(anchor_cap_ratio):
+        raise ValueError(f"Non-finite anchor_cap_ratio: {anchor_cap_ratio!r}")
+    if anchor_cap_eur is not None and (isinstance(anchor_cap_eur, bool) or not math.isfinite(anchor_cap_eur)):
+        raise ValueError(f"Non-finite anchor_cap_eur: {anchor_cap_eur!r}")
+    raw = _validate_finite_prices(comp_prices)
     trimmed = trim_outliers_iqr(raw)
     if not trimmed:
         return MarketValuation(
@@ -77,25 +101,54 @@ def compute_net_economics(item: ProductSnapshot, cfg: SieveConfig) -> tuple[floa
     Deducts supplier price, outbound shipping, marketplace commission, and return reserve
     from target_resale_eur. Returns (rounded_profit_eur, rounded_margin_ratio).
     """
+    vals = (
+        item.supplier_price_eur,
+        item.target_resale_eur,
+        item.shipping_cost_eur,
+        cfg.marketplace_fee_pct,
+        cfg.return_reserve_pct,
+    )
+    if any(isinstance(v, bool) or not math.isfinite(v) for v in vals) or item.target_resale_eur <= 0:
+        raise ValueError("Economic inputs must be finite non-boolean numbers with positive target_resale_eur.")
+    if cfg.marketplace_fee_pct + cfg.return_reserve_pct >= 1.0:
+        raise ValueError("Combined marketplace_fee_pct and return_reserve_pct must be < 1.0.")
     fees = item.target_resale_eur * (cfg.marketplace_fee_pct + cfg.return_reserve_pct)
     total_cost = item.supplier_price_eur + item.shipping_cost_eur + fees
     net_profit = item.target_resale_eur - total_cost
     net_margin = net_profit / item.target_resale_eur
+    if not (math.isfinite(net_profit) and math.isfinite(net_margin)):
+        raise ValueError("Computed economic metrics overflowed to non-finite values.")
     return round(net_profit, 2), round(net_margin, 4)
 
 
 def detect_price_drop(
-    item: ProductSnapshot, previous_price: float | None, min_drop_pct: float
+    item: ProductSnapshot,
+    previous_price: float | None,
+    min_drop_pct: float,
+    previous_recorded_at: datetime | None = None,
 ) -> PriceAlert | None:
     """Compare current supplier price against the last stored observation.
 
     Returns a PriceAlert if the relative drop meets or exceeds min_drop_pct; otherwise None.
     """
+    if (
+        isinstance(item.supplier_price_eur, bool)
+        or isinstance(min_drop_pct, bool)
+        or not (math.isfinite(item.supplier_price_eur) and math.isfinite(min_drop_pct))
+    ):
+        raise ValueError("Price drop inputs must be finite non-boolean numbers.")
+    if previous_price is not None and (isinstance(previous_price, bool) or not math.isfinite(previous_price)):
+        raise ValueError("previous_price must be a finite non-boolean number.")
+    if previous_recorded_at is not None and _normalize_utc(item.recorded_at) < _normalize_utc(previous_recorded_at):
+        return None
     if previous_price is None or previous_price <= 0 or item.supplier_price_eur >= previous_price:
         return None
-    drop_pct = round((previous_price - item.supplier_price_eur) / previous_price, 4)
-    if drop_pct < min_drop_pct:
+    raw_drop = (previous_price - item.supplier_price_eur) / previous_price
+    if not math.isfinite(raw_drop):
+        raise ValueError("Computed price drop overflowed to a non-finite value.")
+    if raw_drop < min_drop_pct:
         return None
+    drop_pct = round(raw_drop, 4)
     return PriceAlert(
         sku=item.sku,
         title=item.title,
@@ -110,6 +163,7 @@ def evaluate_product(
     item: ProductSnapshot,
     cfg: SieveConfig,
     previous_price: float | None = None,
+    previous_recorded_at: datetime | None = None,
 ) -> FilterVerdict:
     """Run a single SKU through the deterministic 3-stage B2B sieve pipeline.
 
@@ -118,7 +172,12 @@ def evaluate_product(
     combining margin, rating, delivery speed, and active price-drop bonus.
     """
     net_profit, net_margin = compute_net_economics(item, cfg)
-    alert = detect_price_drop(item, previous_price, cfg.price_drop_alert_pct)
+    alert = detect_price_drop(
+        item,
+        previous_price,
+        cfg.price_drop_alert_pct,
+        previous_recorded_at=previous_recorded_at,
+    )
     reasons: list[str] = []
 
     # Stage 1: Hard operational gate
@@ -195,10 +254,17 @@ def run_sieve_batch(
     """
     active_cfg = cfg or SieveConfig()
     verdicts: list[FilterVerdict] = []
-    for item in snapshots:
-        prev_price = store.get_previous_price(item.sku)
-        verdict = evaluate_product(item, active_cfg, previous_price=prev_price)
-        store.save_observation(item, verdict.price_alert)
-        verdicts.append(verdict)
+    with store.transaction():
+        for item in sorted(snapshots, key=lambda s: _normalize_utc(s.recorded_at)):
+            latest = store.get_latest_snapshot(item.sku)
+            prev_price, prev_ts = latest if latest is not None else (None, None)
+            verdict = evaluate_product(
+                item,
+                active_cfg,
+                previous_price=prev_price,
+                previous_recorded_at=prev_ts,
+            )
+            store.save_observation(item, verdict.price_alert)
+            verdicts.append(verdict)
     verdicts.sort(key=lambda v: (v.approved, v.score, v.net_profit_eur), reverse=True)
     return verdicts
