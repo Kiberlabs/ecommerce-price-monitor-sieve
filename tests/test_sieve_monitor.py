@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import csv
+import gc
 import json
 import math
 import random
+import shutil
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -636,3 +639,112 @@ def test_cli_sample_catalog_matches_readme_scores(tmp_path: Path, capsys: pytest
     ):
         assert expected in out
         assert expected in readme
+
+
+@pytest.mark.parametrize(
+    "bad_url",
+    [
+        "http://[::1]/",
+        "http://[0:0:0:0:0:0:0:1]/admin",
+        "http://[0:0:0:0:0:ffff:127.0.0.1]/",
+        "https://localh\u043est/feed",
+        "http://\uff11\uff12\uff17.\uff10.\uff10.\uff11/",
+        "http://127\u200b.0.0.1/",
+        "http://2130706433:8080/",
+        "http://0177.0.0.1:8080/",
+        "http://0x7f000001:8080/",
+    ],
+)
+def test_ssrf_blocks_ipv6_homoglyphs_and_zero_width_bypasses(bad_url: str) -> None:
+    with pytest.raises(ValidationError):
+        _sample_product(supplier_url=bad_url)
+
+
+def test_unicode_zero_width_sku_title_and_nfkc_csv_formula_neutralization(tmp_path: Path) -> None:
+    for zw in ("\u200b\u200c\u200d", "\ufeff  \u2060"):
+        with pytest.raises(ValidationError):
+            _sample_product(sku=zw)
+        with pytest.raises(ValidationError):
+            _sample_product(title=zw)
+
+    verdicts = [
+        FilterVerdict(
+            sku="\ufeff=1+1",
+            title="\uff1dCMD()",
+            approved=False,
+            stage_reached="\u200b+stage",
+            reasons=["\uff20alert", "\r\n-inject"],
+            net_profit_eur=-5.0,
+            net_margin_pct=-0.1,
+            score=0.0,
+            price_alert=None,
+        ),
+        FilterVerdict(
+            sku="\u00ad=1+1",
+            title="\u200e+1+1",
+            approved=False,
+            stage_reached="\u202a-stage",
+            reasons=["\u00ad=reason"],
+            net_profit_eur=-5.0,
+            net_margin_pct=-0.1,
+            score=0.0,
+            price_alert=None,
+        ),
+    ]
+    csv_path = tmp_path / "unicode_safe.csv"
+    export_csv(verdicts, csv_path)
+    with csv_path.open("r", newline="", encoding="utf-8") as fh:
+        rows = list(csv.reader(fh))
+    for row in rows[1:]:
+        assert row[0].startswith("'")
+        assert row[1].startswith("'")
+        assert row[3].startswith("'")
+        assert row[8].startswith("'")
+
+
+def test_recent_alerts_int64_bounds_and_wal_16_thread_stress_and_rmtree(tmp_path: Path) -> None:
+    wal_dir = tmp_path / "wal16"
+    wal_dir.mkdir()
+    db_file = wal_dir / "stress16.db"
+    cfg = SieveConfig(price_drop_alert_pct=0.10)
+    barrier = threading.Barrier(16)
+    errors: list[tuple[int, Exception]] = []
+    err_lock = threading.Lock()
+
+    def _worker(tid: int) -> None:
+        try:
+            barrier.wait(timeout=5.0)
+            with SnapshotStore(db_file) as store:
+                run_sieve_batch([_sample_product(sku=f"SKU-S16-{tid}", supplier_price_eur=100.0)], store, cfg)
+                run_sieve_batch([_sample_product(sku=f"SKU-S16-{tid}", supplier_price_eur=70.0)], store, cfg)
+        except Exception as exc:
+            with err_lock:
+                errors.append((tid, exc))
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        list(pool.map(_worker, range(16)))
+
+    assert errors == []
+    with SnapshotStore(db_file) as store:
+        assert store.journal_mode() == "wal"
+        assert store._ensure_conn().execute("PRAGMA busy_timeout;").fetchone()[0] == 5000
+        for bound in (0, 2**63 - 1, 2**63, -(2**63) - 1):
+            res = store.recent_alerts(bound)
+            assert 1 <= len(res) <= 16
+
+    shutil.rmtree(wal_dir)
+    assert not wal_dir.exists()
+
+    # Unclosed SnapshotStore relies on weakref.finalize during GC before rmtree (WinError 32 check)
+    leak_dir = tmp_path / "wal_gc"
+    leak_dir.mkdir()
+    leak_db = leak_dir / "gc.db"
+
+    def _unclosed() -> None:
+        s = SnapshotStore(leak_db)
+        s.save_observation(_sample_product(sku="SKU-GC"))
+
+    _unclosed()
+    gc.collect()
+    shutil.rmtree(leak_dir)
+    assert not leak_dir.exists()

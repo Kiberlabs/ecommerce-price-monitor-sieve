@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import sys
+import unicodedata
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -34,7 +35,10 @@ def load_catalog(path: Path) -> tuple[list[ProductSnapshot], list[dict[str, str]
 
 def _csv_safe(value: object) -> str:
     s = str(value)
-    if s[:1] in ("=", "+", "-", "@", "\t", "\r", "\n") or s.lstrip()[:1] in ("=", "+", "-", "@"):
+    stripped = "".join(
+        ch for ch in unicodedata.normalize("NFKC", s) if unicodedata.category(ch) != "Cf"
+    ).lstrip()
+    if s[:1] in ("=", "+", "-", "@", "\t", "\r", "\n") or stripped[:1] in ("=", "+", "-", "@"):
         return "'" + s
     return s
 

@@ -37,6 +37,9 @@ _FORBIDDEN_NETS = (
 )
 
 
+_ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060\ufeff]")
+
+
 def _reject_bool(value: object) -> object:
     if isinstance(value, bool):
         raise ValueError("Boolean value is not valid for numeric field.")
@@ -176,7 +179,7 @@ class ProductSnapshot(BaseModel):
     @field_validator("sku", "title")
     @classmethod
     def _check_non_blank(cls, value: str) -> str:
-        if not value.strip():
+        if not _ZERO_WIDTH_RE.sub("", value).strip():
             raise ValueError("Field must not be blank.")
         return value
 
